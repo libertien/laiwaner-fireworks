@@ -9,11 +9,11 @@ const DRAG_COEFFICIENT = 0.2;
 // 时间间隔（毫秒）
 const TIME_INTERVAL = 100;
 // 最小初速度
-const MIN_INITIAL_SPEED = 80;
+const MIN_INITIAL_SPEED = 40;
 // 初速度随机增量
-const INITIAL_SPEED_INCREMENT = 20;
+const INITIAL_SPEED_INCREMENT = MIN_INITIAL_SPEED * 0.15;
 // 轨迹计算时长（秒）
-const PATH_CALCULATE_DURATION = 6;
+const PATH_CALCULATE_DURATION = 5;
 // 圆球到平面的投影角度，默认0度为垂直于观看角度的平面
 const DEFAULT_THETA = 0;
 // 各种烟花模式对应的角度集
@@ -25,18 +25,22 @@ const PARTICLE_SETS = { 1: [20], 2: [60], 3: [30] };
 const VISIBLE_DURATION = 2000;
 // 亮点持续时长（毫秒）
 const HIGHLIGHT_DURATION = 2 * TIME_INTERVAL;
+// 光晕半径
+const HALO_RADIUS = 15
+// 光晕半径波动
+const HALO_RADIUS_FLUCTUATION = 2
 // 拖尾淡出持续时长（毫秒）
-const TRAIL_DURATION = 2000;
+let TRAIL_DURATION = 1500;
 // 尾痕最大宽度
 const MAX_TRAIL_WIDTH = 4;
 // 尾痕最小宽度
 const MIN_TRAIL_WIDTH = 1;
 // 粒子释放最大距离
-const MAX_PARTICLE_DISTANCE = 5;
+const MAX_PARTICLE_DISTANCE = 6;
 // 粒子释放尝试次数
-const PARTICLE_ATTEMPTS = 5;
+const PARTICLE_ATTEMPTS = 10;
 // 整体淡出速度，在总时长末尾1/x的时间里匀速淡出
-const FADE_OUT_SPEED = 5;
+const FADE_OUT_SPEED = 2;
 
 // 初始化画布
 const canvas = document.getElementById('myCanvas');
@@ -74,6 +78,11 @@ modeSelection.forEach(radio => {
         currentMode = parseInt(radio.value);
         particleCount = PARTICLE_SETS[currentMode];
         console.log(currentMode, particleCount);
+        if (currentMode === 2){
+            TRAIL_DURATION = 4000;
+        } else {
+            TRAIL_DURATION = 2000;
+        }
     });
 });
 
@@ -86,6 +95,7 @@ function generatePathPoints(x0, y0, t0, angle, theta) {
     const pathPoints = [];
     let t = 0;
     // 模拟一段时间内的轨迹
+    const pathDuration = PATH_CALCULATE_DURATION + Math.random() * 2
     while (t < PATH_CALCULATE_DURATION) {
         const x = x0 + (vx0 / DRAG_COEFFICIENT) * (1 - Math.exp(-DRAG_COEFFICIENT * t));
         // 调整竖直方向的位移公式，因为 canvas 的 Y 轴方向与真实世界相反
@@ -111,9 +121,16 @@ canvas.addEventListener('click', function (event) {
     // 生成本次点击的随机颜色
     const hue = Math.round(Math.random() * 360);
     const randomTrailColorHsl = `hsl(${hue + 30}, 100%, 60%)`;
+    const randomFlameColorHsl = `hsl(${hue}, 100%, 90%)`;
     const randomHaloColorHsl = `hsl(${hue}, 100%, 60%)`;
     const randomHighlightColorHsl = `hsl(${hue}, 100%, 80%)`;
-    const randomTrailColorRgb = hslToRgb(randomTrailColorHsl);
+    let randomTrailColorRgb = hslToRgb(randomTrailColorHsl);
+    // let particleColorRgb = `rgb(255, 235, 180)`;
+    let flameColorRgb = hslToRgb(randomFlameColorHsl);
+    if (Math.random() > 0.5){
+        randomTrailColorRgb = `rgb(255, 160, 0)`
+        flameColorRgb = `rgb(255, 220, 80)`
+    }
     const randomHaloColorRgb = hslToRgb(randomHaloColorHsl);
     const randomHighlightColorRgb = hslToRgb(randomHighlightColorHsl);
 
@@ -133,7 +150,8 @@ canvas.addEventListener('click', function (event) {
                 startTime: t0,
                 trailColor: randomTrailColorRgb,
                 haloColor: randomHaloColorRgb,
-                highlightColor: randomHighlightColorRgb
+                highlightColor: randomHighlightColorRgb,
+                flameColor: flameColorRgb
             });
         }
         thetaIndex++;
@@ -148,9 +166,9 @@ canvas.addEventListener('click', function (event) {
 
 function drawHighlight(x, y, highlightColor, fadeOutOpacity) {
     ctx.beginPath();
-    const highlightRadius = 3 + Math.random() * 1;
+    const highlightRadius = 3 + 0.5 * Math.sin(y / 10);
     ctx.arc(x, y, highlightRadius, 0, 2 * Math.PI);
-    ctx.fillStyle = rgbAddAlpha(highlightColor, fadeOutOpacity);
+    ctx.fillStyle = rgbAddAlpha(highlightColor, fadeOutOpacity + Math.sin(y / 10) * 0.3);
     ctx.fill();
 }
 
@@ -158,14 +176,14 @@ function drawHalo(x, y, themeColor, fadeOutOpacity) {
     ctx.save();
     ctx.filter = 'blur(3px)';
 
-    const radius = 25 + Math.sin(x / 100) * 2;
+    const radius = HALO_RADIUS + Math.sin(x / 100) * HALO_RADIUS_FLUCTUATION;
     const startOpacity = 0.4 + Math.random() * 0.2 + Math.sin(x / 100) * 0.1;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
 
-    // 使用 rgbAddAlpha 方法生成颜色停止点，渲染一个由内到外、从亮到暗的光晕
+    // 使用 rgbAddAlpha 方法生成颜色停止点，渲染一个由内到外、从亮到暗的光晕；注释的两行删掉对结果影响不大
     gradient.addColorStop(0, rgbAddAlpha(themeColor, 1 * fadeOutOpacity));
-    gradient.addColorStop(0.3, rgbAddAlpha(themeColor, startOpacity * fadeOutOpacity));
-    gradient.addColorStop(0.6, rgbAddAlpha(themeColor, startOpacity * 0.3 * fadeOutOpacity));
+    gradient.addColorStop(0.4, rgbAddAlpha(themeColor, startOpacity * fadeOutOpacity));
+    // gradient.addColorStop(0.6, rgbAddAlpha(themeColor, startOpacity * 0.3 * fadeOutOpacity));
     gradient.addColorStop(1, rgbAddAlpha(themeColor, 0));
 
     ctx.beginPath();
@@ -199,7 +217,7 @@ function drawTrail(pathPoints, currentPointIndex, currentTime, trailColor, fadeO
     }
 }
 
-function drawTrailNew(trailPoints, currentTime, trailfadeOutDuration, themeColor, fadeOutOpacity) {
+function drawTrailNew(trailPoints, currentTime, trailfadeOutDuration, themeColor, flameColor, fadeOutOpacity) {
     for (let j = 0; j < trailPoints.length; j++) {
         const point = trailPoints[j];
         const nextPoint = trailPoints[j + 1];
@@ -207,7 +225,7 @@ function drawTrailNew(trailPoints, currentTime, trailfadeOutDuration, themeColor
             const elapsedTime = currentTime - trailPoints[j].time;
             let trailColor;
             // 拖尾颜色逐渐变淡并变深
-            const trailOpacity = 1 - elapsedTime / trailfadeOutDuration * 0.8; // 颜色变深因子
+            const trailOpacity = 1 - elapsedTime / trailfadeOutDuration; // 颜色变深因子
             trailColor = rgbAddAlpha(themeColor, trailOpacity - 1 + fadeOutOpacity);
 
             // 尾痕宽度逐渐变细
@@ -231,8 +249,8 @@ function drawTrailNew(trailPoints, currentTime, trailfadeOutDuration, themeColor
                 // 在连线周围随机生成一个点
                 const randomOffsetX = (Math.random() - 0.5) * 2 * MAX_PARTICLE_DISTANCE;
                 const randomOffsetY = (Math.random() - 0.5) * 2 * MAX_PARTICLE_DISTANCE;
-                const randomX = point.x + (nextPoint.x - point.x) * Math.random() + randomOffsetX;
-                const randomY = point.y + (nextPoint.y - point.y) * Math.random() + randomOffsetY;
+                const randomX = Math.round(point.x + (nextPoint.x - point.x) * Math.random() + randomOffsetX);
+                const randomY = Math.round(point.y + (nextPoint.y - point.y) * Math.random() + randomOffsetY);
 
                 // 计算随机点到连线的距离
                 const distance = pointToLineDistance(randomX, randomY, point.x + randomX1, point.y + randomY1, nextPoint.x + randomX2, nextPoint.y + randomY2);
@@ -242,9 +260,9 @@ function drawTrailNew(trailPoints, currentTime, trailfadeOutDuration, themeColor
 
                 // 根据概率决定是否绘制粒子
                 if (Math.random() < probability) {
-                    ctx.fillStyle = `rgba(255, 195, 50, ${0.8 * fadeOutOpacity - 0.2})`; // 亮橙色
+                    ctx.fillStyle = rgbAddAlpha(flameColor, 0.8 * fadeOutOpacity - 0.2 )
                     ctx.beginPath();
-                    ctx.arc(randomX, randomY, 1, 0, 2 * Math.PI);
+                    ctx.arc(randomX, randomY, 0.5, 0, 2 * Math.PI);
                     ctx.fill();
                 }
             }
@@ -278,9 +296,13 @@ function animate() {
         // 遍历所有彩球
         for (let i = particles.length - 1; i >= 0; i--) {
             const particle = particles[i];
-            const { pathPoints, currentPointIndex, startTime, trailColor, haloColor, highlightColor } = particle;
+            const { pathPoints, currentPointIndex, startTime, trailColor, haloColor, highlightColor, flameColor } = particle;
             // 计算全局透明度，实现整体淡出
-            const fadeOutOpacity = Math.min(1, (1 - currentPointIndex / pathPoints.length) * FADE_OUT_SPEED);
+            const fadeOutOpacity = Math.min(1, (1 - currentPointIndex / pathPoints.length * 1.2) * FADE_OUT_SPEED);
+            // const totalPoints = pathPoints.length 
+            // const remainingPoints = pathPoints.length - currentPointIndex
+            // const fadingPoints = Math.round(totalPoints / FADE_OUT_SPEED)
+            // const fadeOutOpacity = Math.max(0, Math.cos(Math.max(0, 1- remainingPoints / fadingPoints) * (Math.PI / 2)));
 
             if (currentPointIndex < pathPoints.length) {
                 const currentPoint = pathPoints[currentPointIndex];
@@ -310,9 +332,9 @@ function animate() {
         // 遍历所有彩球
         for (let i = particles.length - 1; i >= 0; i--) {
             const particle = particles[i];
-            const { pathPoints, currentPointIndex, startTime, trailColor, haloColor, highlightColor } = particle;
-            // 计算全局透明度，实现整体淡出
-            const fadeOutOpacity = Math.min(1, (1 - currentPointIndex / pathPoints.length) * FADE_OUT_SPEED);
+            const { pathPoints, currentPointIndex, startTime, trailColor, haloColor, highlightColor, flameColor } = particle;
+            // 计算彩球此时的透明度，实现整体淡出
+            const fadeOutOpacity = Math.min(1, (1 - currentPointIndex / pathPoints.length * 1.2) * FADE_OUT_SPEED);
 
             // 计算需要渲染的尾迹坐标的索引范围
             const expectedTrailIndexBegin = Math.max(0, Math.floor((currentTime - HIGHLIGHT_DURATION - TRAIL_DURATION - startTime) / TIME_INTERVAL));
@@ -327,7 +349,7 @@ function animate() {
             for (let j = expectedPointIndexBegin; j < Math.min(expectedPointIndexEnd, pathPoints.length); j++) {
                 const point = pathPoints[j];
                 if (currentTime - point.time <= HIGHLIGHT_DURATION) {
-                    drawTrailNew(trailPoints, currentTime, TRAIL_DURATION, trailColor, fadeOutOpacity);
+                    drawTrailNew(trailPoints, currentTime, TRAIL_DURATION, trailColor, flameColor, fadeOutOpacity);
                     drawHalo(point.x, point.y, haloColor, fadeOutOpacity);
                     drawHighlight(point.x, point.y, highlightColor, fadeOutOpacity);
                 }
