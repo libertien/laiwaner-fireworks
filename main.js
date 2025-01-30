@@ -19,7 +19,7 @@ const DEFAULT_THETA = 0;
 // 各种烟花模式对应的角度集
 const THETA_SETS = { 1: [0], 2: [0], 3: [85, 75, 60, 45, 25, 0] };
 // 各种烟花模式对应的彩球数量集
-const PARTICLE_SETS = { 1: [20], 2: [40], 3: [30] };
+const PARTICLE_SETS = { 1: [20], 2: [60], 3: [30] };
 
 // 轨迹延迟时长（毫秒）
 const VISIBLE_DURATION = 2000;
@@ -41,8 +41,17 @@ const FADE_OUT_SPEED = 5;
 // 初始化画布
 const canvas = document.getElementById('myCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// 定义一个函数来调整 canvas 的大小
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+// 页面加载时初始化 canvas 大小
+resizeCanvas();
+
+// 监听窗口大小变化事件
+window.addEventListener('resize', resizeCanvas);
 
 // 存储所有碎片的轨迹信息
 const particles = [];
@@ -101,8 +110,10 @@ canvas.addEventListener('click', function (event) {
 
     // 生成本次点击的随机颜色
     const hue = Math.round(Math.random() * 360);
+    const randomTrailColorHsl = `hsl(${hue + 30}, 100%, 60%)`;
     const randomHaloColorHsl = `hsl(${hue}, 100%, 60%)`;
     const randomHighlightColorHsl = `hsl(${hue}, 100%, 80%)`;
+    const randomTrailColorRgb = hslToRgb(randomTrailColorHsl);
     const randomHaloColorRgb = hslToRgb(randomHaloColorHsl);
     const randomHighlightColorRgb = hslToRgb(randomHighlightColorHsl);
 
@@ -120,7 +131,7 @@ canvas.addEventListener('click', function (event) {
                 pathPoints: generatePathPoints(x0, y0, t0, angle, theta),
                 currentPointIndex: 0,
                 startTime: t0,
-                trailColor: randomHaloColorRgb,
+                trailColor: randomTrailColorRgb,
                 haloColor: randomHaloColorRgb,
                 highlightColor: randomHighlightColorRgb
             });
